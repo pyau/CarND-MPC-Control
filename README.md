@@ -1,6 +1,62 @@
 # CarND-Controls-MPC
 Self-Driving Car Engineer Nanodegree Program
-https://youtu.be/yX21Y8NSWnA
+
+Result: https://youtu.be/yX21Y8NSWnA
+Vehicle driving on course with a target speed of 100mph.
+
+## MPC Controller
+
+## Model
+
+A simple kinematic model is used for the controller to describe the vehicle's state and behavior across time steps. The states of the model includes x, y, orientation and velocity [x,y,psi,v] , and actuators steering, throttle [delta, a] as control inputs, to change the vehicle state over time.
+
+Kinetic model is used to predict the state on next time step by using current vehicle state and actuators:
+
+x_1 = x + v * cos(psi) * dt
+y_1 = y + v * sin(psi) * dt
+psi_1 = psi + v / Lf * delta * dt
+v_1 = v + a * dt
+
+Lf is the distance between the front of vehicle and center of gravity.
+
+Errors cross track error (CTE) and psi error (epsi) are used to build the cost function for MPC. They are updated on a new time step by these equations:
+
+cte_1 = cte + v * sin(epsi) * dt
+epsi_1 = epsi + v / Lf * delta * dt
+
+## Timestep length and Elapsed Duration
+
+Parameters N and dt in MPC controls the time horizon in which MPC plans the driving path over. 
+
+For tuning dt, I do not think it makes sense to set it to value lower than 0.1s, the expected control latency.  Too large value for dt sacrifies precision.
+
+The relationship between N and dt is Time = N * dt.  So if number of steps N is large, T becomes large, which means MPC optimizes for road that is far away.  N also directly correlates to memory and computation overhead.
+
+I chose N as 10, and dt as 0.1 (by trial and error), so the time horizon that the MPC plans for is 1 second.  I have also increased N to 20, but I see no improvement in the behavior.  Increasing dt to 0.2 will cause the car go off track at sharp turn. 
+
+## Polynomial fitting and MPC preprocessing
+
+At each control loop, 6 closest waypoints closest to the car is given by the simulator.  These waypoints are fitted with a third order polynomial (main.cpp line 112). This polynomial is then used to evaluate MPC's reference line, and also current CTE (main.cpp line 114).
+
+Simulator provides coordinates in global reference system.  In main.cpp, line 97-104, the codes convert the waypoints to vehicle coordinates.
+
+## Model Predictive Control with Latency
+
+In main.cpp line 121-126, the program uses the motion model equations to predict the state of vehicle in 100ms.  This updated state is then feed into the MPC solver (main.cpp line 130).  This is to compensate the fact that the vehicle would have moved on for 100ms from the time the waypoints were received before the control can be actuated.
+
+## Cost function
+
+MPC consists of a solver for a cost function that includes several cost items:
+CTE: whether the car follows the reference line
+EPSI: heading error
+V: difference from target velocity
+DELTA, A: minimize the use of actuators
+D_DELTA, D_A: minimize the value gap between sequential actuations
+
+In general, I find that I need to put in a lot of weight to the cost items CTE and EPSI, to make sure the car is driving in the middle of the lane.  V, DELTA and A do not need much weight.  Putting weight in V actually can cause trouble in sharp turns, as the vehicle would try to keep its speed going into a turn.  Some weight should be put on the rate of change D_DELTA, D_A because we want the vehicle to drive smoothly.
+
+The final weights are defined in MPC.cpp lines 34-40.
+
 ---
 
 ## Dependencies
